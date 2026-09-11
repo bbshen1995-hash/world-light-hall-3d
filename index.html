@@ -76,6 +76,14 @@ table.lt th:first-child,table.lt td:first-child{text-align:left}
 .helpbody p,.helpbody li{font-size:12.5px}
 .helpbody ul{padding-left:18px;margin:4px 0}
 @media (max-width:1100px){body{grid-template-columns:230px 1fr 250px}}
+/* 手機與窄螢幕：3D 畫面放最上面，面板往下疊，整頁可捲動 */
+@media (max-width:820px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 62vh auto auto auto;grid-template-areas:"bar" "stage" "right" "left" "st";overflow:auto;height:auto}
+  #left,#right{border-width:1px 0 0 0;max-height:none}
+  #right{min-height:0}
+  .grp.right{margin-left:0}
+  #status{white-space:normal;flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
