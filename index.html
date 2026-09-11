@@ -153,7 +153,7 @@ table.lt th:first-child,table.lt td:first-child{text-align:left}
 </script>
 <script>
 // 世界之光主堂 3D：預設資料（v3，平面取自掃地機器人「主堂前」地圖）
-// 座標：x 往東（0 = 主堂西緣，也就是玄關開口那條線），z 往南（0 = 北側凹室的牆），y 往上；單位公尺。
+// 座標：x 往東（0 ≈ 西側店面玻璃南段，主堂沒有獨立玄關），z 往南（0 = 北側凹室的牆），y 往上；單位公尺。
 // 地圖換算：x = (1083 − 像素x) / 40.8，z = (1334 − 像素y) / 40.8，再乘上比例係數 k = 東西長 / 23.6。
 // 40.8 px/m 來自兩個實測：控台區寬 299.5 cm 對應地圖缺角 121 px，深 131 cm 對應 54 px。
 // rot（度）：0 時喇叭、螢幕、樂手面向南（會眾）；椅子面向北。
@@ -185,7 +185,7 @@ var P_FIELDS = [
   ['EW', '主堂東西長（全圖比例跟著換算）', 'map'],
   ['Hg', '平頂與格柵天花板高（照片 4 以控台寬為尺量得 3.66）', 'est'], ['Hd', '黑色裸露天花板高', 'est'],
   ['sh', '舞台主平台高', 'est'], ['stepH', '舞台前階高', 'est'], ['stepW', '舞台前階寬', 'est'],
-  ['lobbyW', '玄關深度（西側店面玻璃到主堂西緣）', 'est'], ['tile', '主堂地磚邊長', 'ok']
+  ['tile', '主堂地磚邊長', 'ok']
 ];
 
 var GROUPS = {
@@ -261,7 +261,7 @@ var ROOM_A_PX = [[288, 1386], [300, 1386], [300, 1470], [252, 1470], [180, 1434]
 var ROOM_B_PX = [[954, 1548], [972, 1548], [984, 1578], [954, 1578]];
 
 function buildArch(P) {
-  var D = hallDims(P), k = D.k, Hg = P.Hg, Hd = P.Hd, lw = P.lobbyW;
+  var D = hallDims(P), k = D.k, Hg = P.Hg, Hd = P.Hd;
   function m(v) { return +(v * k).toFixed(3); }
   function pts(list) { return list.map(function (p) { return mapPt(P, p[0], p[1]); }); }
   var A = [];
@@ -346,7 +346,7 @@ function buildArch(P) {
   add({ id: 'c_gW2', g: 'ceil', type: 'ceil', name: '格柵天花板（西側南段）', x: m(3.4), z: m(7.0), w: m(2.4), d: m(4.4), y: Hg, style: 'grid', src: 'est' });
   add({ id: 'c_nur', g: 'ceil', type: 'ceil', name: '親子室天花板', x: m(3.12), z: m(11.18), w: m(6.25), d: m(3.32), y: Hg, style: 'grid', src: 'est' });
   add({ id: 'c_lobbyDark', g: 'ceil', type: 'ceil', name: '入口黑色裸露天花板（斜切與南面玻璃上方）', x: 1.1, z: m(6.9), w: 2.2, d: m(4.2), y: Hd, style: 'dark', src: 'est' });
-  add({ id: 'c_lobbyFan', g: 'ceil', type: 'fan', name: '吊扇（玄關）', x: LB_.fan[0], z: LB_.fan[2], y: Math.min(Hd - 0.3, LB_.fan[1]), src: 'est' });
+  add({ id: 'c_lobbyFan', g: 'ceil', type: 'fan', name: '吊扇（入口斜切玻璃旁）', x: LB_.fan[0], z: LB_.fan[2], y: Math.min(Hd - 0.3, LB_.fan[1]), src: 'est' });
   add({ id: 'c_soffit', g: 'ceil', type: 'soffit', name: '舞台上方弧形白色天花', x: m(13.7), z: m(1.27), w: m(15.5), d: m(5.0), y: Hg, t: Hd - Hg, color: '#f6f5f0', src: 'est' });
   var ccx = m(13.7), ccz = m(-1.5);
   // 照片 3、4：由舞台往外依序是白色弧形平頂、橘色長弧（兩端吊投影機）、黃白白黃四片、後段兩片白色
@@ -357,7 +357,7 @@ function buildArch(P) {
   ].forEach(function (c, i) {
     add({ id: 'c_cl' + i, g: 'ceil', type: 'cloud', name: c[6], x: ccx, z: ccz, r1: m(c[0]), r2: m(c[1]), a0: c[2], a1: c[3], color: c[4], y: +(Hd - c[5]).toFixed(2), t: 0.12, src: 'est' });
   });
-  add({ id: 'c_disc', g: 'ceil', type: 'cloud', name: '黃色圓形吊板（玄關與主堂交界）', x: LOBBY.disc[0], z: LOBBY.disc[2], r1: 0.05, r2: 1.3, a0: 0, a1: 360, color: '#e6da6b', y: LOBBY.disc[1], t: 0.12, src: 'est' });
+  add({ id: 'c_disc', g: 'ceil', type: 'cloud', name: '黃色圓形吊板（入口米色地磚上方）', x: LOBBY.disc[0], z: LOBBY.disc[2], r1: 0.05, r2: 1.3, a0: 0, a1: 360, color: '#e6da6b', y: LOBBY.disc[1], t: 0.12, src: 'est' });
   [[20.2, 5.0], [13.7, 7.7], [7.2, 5.0], [17.46, 8.84], [9.94, 8.84], [5.5, 7.2]].forEach(function (p, i) {
     add({ id: 'c_fan' + i, g: 'ceil', type: 'fan', name: '吊扇', x: m(p[0]), z: m(p[1]), y: Hd - 0.5, src: 'est' });
   });
@@ -1316,10 +1316,10 @@ var App = (function () {
   }
   A.setMatch = function (patch) { for (var k in patch) A.match[k] = patch[k]; resize(); hook('onMatch'); };
 
-  // 平面圖：框住玄關到東窗、北牆到南窗
+  // 平面圖：框住西側店面玻璃到東窗、北牆到南窗
   function fitPlan() {
     var P = hallDims(A.state.P), a = (stageEl.clientWidth || 1) / (stageEl.clientHeight || 1);
-    var x0 = -P.lobbyW - 0.6, x1 = P.L + 0.8, z0 = -P.backD - 0.4, z1 = P.W + 0.8;
+    var x0 = Math.min(LOBBY.ca[0], 0) - 0.6, x1 = P.L + 0.8, z0 = -P.backD - 0.4, z1 = P.W + 0.8;
     plan.cx = (x0 + x1) / 2; plan.cz = (z0 + z1) / 2;
     plan.zoom = Math.max(z1 - z0, (x1 - x0) / a) * 1.04;
   }
@@ -1754,7 +1754,7 @@ var UI = (function () {
   function renderHelp() {
     $('#tab-help').innerHTML = '<div class="helpbody">' +
       '<h3>這份模型是什麼</h3><p>主堂的平面形狀取自掃地機器人「主堂前」的地圖，比例用現場實測的控台區寬 299.5 cm 與深 131 cm 換算。高度與物件擺放再用 2026-09-11 的影片和四張現場照片校對。地板上每一格就是現場一塊 80 cm 地磚。上方勾「掃地機地圖」可以把原圖疊在地板上對照。</p>' +
-      '<h3>哪裡準、哪裡是推測</h3><ul><li>實測：地磚 80 cm、控台區寬 299.5 cm、深 131 cm</li><li>地圖換算（誤差約 ±3%）：主堂外框、舞台六角形外緣、柱位、親子室斜面、座位五區的位置與方向</li><li>原廠規格：JBL VRX932LAP、Turbosound TL-1201 的外形尺寸</li><li>影片推算：天花板高、舞台高度與前階寬、吊板與吊扇位置</li><li>推測：MID 喇叭、投影幕位置、玄關與樓梯間</li></ul><p>點任一物件，右側會標出它屬於哪一級。完整清單在專案資料夾的「平面推算與量測清單.md」。</p>' +
+      '<h3>哪裡準、哪裡是推測</h3><ul><li>實測：地磚 80 cm、控台區寬 299.5 cm、深 131 cm</li><li>地圖換算（誤差約 ±3%）：主堂外框、舞台六角形外緣、柱位、親子室斜面、座位五區的位置與方向</li><li>原廠規格：JBL VRX932LAP、Turbosound TL-1201 的外形尺寸</li><li>影片反推：入口店面玻璃、大門、樓梯間白牆與交誼廳霧面玻璃的位置</li><li>影片推算：天花板高、舞台高度與前階寬、吊板與吊扇位置</li><li>推測：MID 喇叭、投影幕位置</li></ul><p>點任一物件，右側會標出它屬於哪一級。完整清單在專案資料夾的「平面推算與量測清單.md」。</p>' +
       '<h3>操作</h3><ul><li>左鍵拖曳空白處旋轉，右鍵或 Shift 拖曳平移，滾輪縮放</li><li>點物件選取，直接拖曳移動；方向鍵微移 5 cm，Shift 加方向鍵移一塊地磚</li><li>R 旋轉 15°，Delete 刪除，⌘D 複製，⌘Z 復原</li><li>座位視線：切過去後點地板任一處，就換成坐在那裡看舞台</li><li>量距離：點兩點，顯示距離、地磚數與聲音到達時間</li><li>聆聽點：點地板放一個人耳位置，右側列出每顆喇叭的距離與到達時間</li></ul>' +
       '<h3>存檔</h3><p>每次修改都自動存在這台電腦的這個瀏覽器裡。要換瀏覽器、給別人或備份，請用「匯出 JSON」，之後用「匯入 JSON」讀回。「另存配置」可以存多套，例如主日、特會、兒主大班。</p>' +
       '<h3>給其他軟體用</h3><p>「匯出 GLB」輸出標準 3D 檔，每個物件保留名稱與顏色（不含貼圖）。Blender 可以直接匯入 .glb；其他軟體請先確認是否支援 glTF。</p>' +
@@ -1770,7 +1770,7 @@ var UI = (function () {
     var m = App.match, V = MATCH_SHOTS.filter(function (s) { return s.kind === 'video'; }), Ph = MATCH_SHOTS.filter(function (s) { return s.kind === 'photo'; });
     var t0 = V.length ? V[0].t : 0, t1 = V.length ? V[V.length - 1].t : 0, cur = App.matchShot();
     if (!bar.dataset.built) {
-      bar.innerHTML = '<select id="mSrc"><option value="video">影片 IMG_6493（玄關到舞台西側）</option>' + Ph.map(function (p) { return '<option value="' + p.id + '">' + esc(p.label) + '</option>'; }).join('') + '</select>' +
+      bar.innerHTML = '<select id="mSrc"><option value="video">影片 IMG_6493（入口店面玻璃到舞台西側）</option>' + Ph.map(function (p) { return '<option value="' + p.id + '">' + esc(p.label) + '</option>'; }).join('') + '</select>' +
         '<span class="tl"><button id="mPlay">播放</button><input type="range" id="mT" min="' + t0 + '" max="' + t1 + '" step="0.05"><span id="mTv"></span></span>' +
         '<label class="chk"><input type="checkbox" id="mOv" checked>疊原圖</label><label>透明度 <input type="range" id="mOp" min="0" max="1" step="0.05"></label>' +
         '<span id="mInfo" class="muted"></span>';
