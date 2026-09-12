@@ -1034,7 +1034,7 @@ function exportGLB(root) {
 <script>
 // 核心：狀態、場景、相機、點選拖曳、量測、聆聽點、存讀檔
 var App = (function () {
-  var LS_CUR = 'hall3d.current', LS_LAYOUTS = 'hall3d.layouts', STATE_V = 7;
+  var LS_CUR = 'hall3d.current', LS_LAYOUTS = 'hall3d.layouts', STATE_V = 8;
   var CUT_TYPES = { column: 1, door: 1, cabinet: 1, woodwall: 1 };
   var A = { state: null, sel: null, view: 'orbit', tool: 'select', listen: null, lock: true, snap: true, showCeil: true };
   var renderer, scene, persp, ortho, root, helpers, selBox, groups = {};
@@ -1062,8 +1062,9 @@ var App = (function () {
     // v3 起改用掃地機地圖的平面；v4 依四張現場照片改了投影、喇叭、吊板。舊版預設值已過時，整份換成新預設
     if (!st.v || st.v < 6) return defaultState();
     st.items = st.items.filter(function (i) { return !i.arch; });
-    // v7：喇叭系統依照片與影片重新校正。只換掉預設的 Sub、FOH、front fill、side fill，使用者自己加的物件保留
-    if (st.v < 7) {
+    // v7、v8：喇叭系統依照片與影片重新校正。只換掉預設的 Sub、FOH、front fill、side fill，使用者自己加的物件保留
+    // v8 是補救：v7 第一版還沒刪 MID，那段期間存下的 v7 存檔會一直留著座位區上空的 MID，所以條件放寬到 v < 8
+    if (st.v < 8) {
       var fresh = buildDefaultItems(st.P).filter(function (i) { return /^p_(sub|foh|ff|side)/.test(i.id); });
       var ids = fresh.map(function (i) { return i.id; });
       // 座位區上空的 MID 推測喇叭現場不存在，一併拿掉
