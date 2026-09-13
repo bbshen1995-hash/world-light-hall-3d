@@ -103,6 +103,10 @@ table.lt th:first-child,table.lt td:first-child{text-align:left}
   </div>
   <div class="grp">
     <label class="chk"><input type="checkbox" id="optCeil" checked>天花板</label>
+    <label class="chk" title="提案圖層，不存進配置：黑色裸露樓板中後段鋪吸音板">吸音提案 <select id="optAcoustic"><option value="off">關</option><option value="real">實際樣貌</option><option value="mark">標色</option></select></label>
+    <label class="chk" title="提案範圍">範圍 <select id="optAcScope"><option value="ceil">樓板</option><option value="wall">樓板＋牆面</option><option value="all" selected>樓板＋牆面＋平頂換礦纖板</option></select></label>
+    <button id="btnAcView" title="坐在後排中央、面向舞台抬頭，看處理區">後排抬頭看</button>
+    <button id="btnAcFront" title="坐在前排中央、轉身朝南抬頭，看整片中後段天花、南側平頂與控台後牆">前排回頭看</button>
     <label class="chk"><input type="checkbox" id="optLock" checked>鎖定建築</label>
     <label class="chk"><input type="checkbox" id="optSnap" checked>對齊 5 cm</label>
     <label class="chk" title="把掃地機器人地圖疊在地板上對照"><input type="checkbox" id="optMap">掃地機地圖</label>
@@ -692,6 +696,116 @@ BUILD.cloud = function (it, G) {
   G.add(new THREE.Mesh(g, [mat(it.color || '#f4f2ea'), mat('#d9d6cc')]));
 };
 
+// 吸音提案（不存檔的疊加層）：黑色裸露樓板的座位區上空，避開弧形白天花、色塊吊板與吊扇
+// 吊板一圈圈之間的間隙只有約 0.8 m，整片 60×120 板塞不進弧形窄帶，所以表示成「依間隙裁切貼合」
+// 網格用吊板圓心的極座標（徑向 5 cm、切向 ≤ 5 cm）：吊板內外緣是同心圓弧、兩端是放射線，邊緣才會是平滑的弧，不會出現方格鋸齒
+// frontZ：只取舞台前緣往南（中後段）；舞台兩側、弧形白天花旁的前角不鋪
+function acousticPanels(items, frontZ) {
+  var dark = items.find(function (i) { return i.id === 'c_dark'; });
+  if (!dark) return { quads: [], area: 0, y: 0 };
+  var soff = items.find(function (i) { return i.type === 'soffit'; });
+  var clouds = items.filter(function (i) { return i.type === 'cloud' && i.r1 > 1; });
+  var fans = items.filter(function (i) { return i.type === 'fan'; });
+  var MG = 0.05, FAN = 0.3;
+  var X0 = dark.x - dark.w / 2, X1 = dark.x + dark.w / 2, Z0 = dark.z - dark.d / 2, Z1 = dark.z + dark.d / 2;
+  function free(x, z) {
+    if (x < X0 || x > X1 || z < Z0 || z > Z1 || z < frontZ) return false;
+    if (soff) { var u = (x - soff.x) / (soff.w / 2 + MG), v = (z - soff.z) / (soff.d + MG); if (v >= -0.05 && u * u + v * v <= 1) return false; }
+    for (var i = 0; i < clouds.length; i++) {
+      var c = clouds[i], dx = x - c.x, dz = z - c.z, r = Math.hypot(dx, dz), a = Math.atan2(dz, dx) / D2R, ma = MG / Math.max(r, 0.1) / D2R;
+      if (r >= c.r1 - MG && r <= c.r2 + MG && a >= c.a0 - ma && a <= c.a1 + ma) return false;
+    }
+    for (var j = 0; j < fans.length; j++) if (Math.hypot(x - fans[j].x, z - fans[j].z) < FAN) return false;
+    return true;
+  }
+  var cx = clouds.length ? clouds[0].x : dark.x, cz = clouds.length ? clouds[0].z : Z0 - 1;
+  var rMin = Math.max(0.05, Z0 - cz), rMax = Math.max(Math.hypot(X0 - cx, Z1 - cz), Math.hypot(X1 - cx, Z1 - cz));
+  var dr = 0.05, quads = [], area = 0;
+  function pt(r, a) { return [cx + r * Math.cos(a), cz + r * Math.sin(a)]; }
+  for (var r = rMin; r < rMax; r += dr) {
+    var r1 = r + dr, n = Math.ceil(Math.PI / Math.min(0.5 * D2R, dr / r1)), da = Math.PI / n;
+    for (var k = 0; k < n; k++) {
+      var a = k * da, a1 = a + da, Q = [pt(r, a), pt(r1, a), pt(r1, a1), pt(r, a1)], c = pt(r + dr / 2, a + da / 2);
+      if (free(c[0], c[1]) && Q.every(function (p) { return free(p[0], p[1]); })) { quads.push(Q); area += (r + dr / 2) * da * dr; }
+    }
+  }
+  return { quads: quads, area: area, y: dark.y };
+}
+// 牆面吸音提案：朝會眾或喇叭的實牆，避開窗、門洞、控台檯面。s0、s1 是從牆段起點（seg 的 a 端）量的距離，toward 決定貼在哪一面
+// 主堂東、南、西三面大多是玻璃，能貼的實牆只有這幾段
+var AC_WALLS = [
+  { id: 'a_wS', s0: 0.1, s1: 4.2, y0: 1.2, y1: 3.4, toward: [9, 10] },       // 控台後方南牆（檯面 1.1 m 以上）
+  { id: 'a_wLN', s0: 1.5, s1: 2.6, y0: 0.9, y1: 3.3, toward: [4, 4] },       // 樓梯間白牆（避開玻璃拉門）
+  { id: 'a_wNWs', s0: 0.05, s1: 1.22, y0: 0.9, y1: 3.4, toward: [6, 0.6] },  // 西側凹室隔牆（side fill 旁）
+  { id: 'a_wNEs', s0: 0.05, s1: 1.22, y0: 0.9, y1: 3.4, toward: [21, 0.6] }, // 東側凹室隔牆
+  { id: 'a_wNS', s0: 0.8, s1: 2.05, y0: 0.8, y1: 3.4, toward: [13, 5] },     // 舞台背牆：西側尖柱與木格柵之間
+  { id: 'a_wNS', s0: 8.45, s1: 9.7, y0: 0.8, y1: 3.4, toward: [13, 5] }      // 舞台背牆：木格柵與東側尖柱之間
+];
+function acousticWalls(items) {
+  var out = [], area = 0;
+  AC_WALLS.forEach(function (w) {
+    var it = items.find(function (i) { return i.id === w.id; }); if (!it) return;
+    var r = (it.rot || 0) * D2R, ux = Math.cos(r), uz = -Math.sin(r), nx = Math.sin(r), nz = Math.cos(r);
+    var sx = it.x - ux * it.w / 2, sz = it.z - uz * it.w / 2, s1 = Math.min(w.s1, it.w), len = s1 - w.s0;
+    if (len <= 0) return;
+    var mx = sx + ux * (w.s0 + len / 2), mz = sz + uz * (w.s0 + len / 2);
+    if ((w.toward[0] - mx) * nx + (w.toward[1] - mz) * nz < 0) { nx = -nx; nz = -nz; }
+    var off = (it.d || 0.18) / 2 + 0.03;
+    out.push({ x: mx + nx * off, z: mz + nz * off, y0: w.y0, h: w.y1 - w.y0, len: len, rot: it.rot || 0 });
+    area += len * (w.y1 - w.y0);
+  });
+  return { panels: out, area: area };
+}
+// 平頂換礦纖板：主堂內的輕鋼架平頂（親子室是獨立房間，不算）
+var AC_GRID = ['c_gS', 'c_gE', 'c_gW', 'c_gW2'];
+function acousticGrid(items) {
+  var out = [], area = 0;
+  AC_GRID.forEach(function (id) {
+    var it = items.find(function (i) { return i.id === id; }); if (!it) return;
+    out.push({ x: it.x, z: it.z, w: it.w, d: it.d, y: it.y }); area += it.w * it.d;
+  });
+  return { rects: out, area: area };
+}
+// mode：real＝實際樣貌、mark＝標色（不受光照影響的亮色，一眼看得出範圍）；平面圖半透明，看得到底下的座位
+// 標色三色：樓板青、牆面洋紅、平頂換礦纖板琥珀。平頂換板外觀與現況相同，實際樣貌不另外畫
+var AC_COLORS = { slab: '#00c8d7', wall: '#ff3d9a', grid: '#ffb000' };
+function acMat(mode, part, plan) {
+  var m = mode === 'mark'
+    ? new THREE.MeshBasicMaterial({ color: AC_COLORS[part], side: THREE.DoubleSide })
+    : new THREE.MeshLambertMaterial({ color: part === 'wall' ? '#b8b1a5' : '#3a3f3d', side: THREE.DoubleSide });
+  if (plan) { m.transparent = true; m.opacity = 0.6; m.depthWrite = false; }
+  return m;
+}
+function buildAcoustic(info, mode, plan) {
+  var C = new THREE.Group(), W = new THREE.Group();
+  if (info.slab) {
+    var y = info.slab.y - 0.05, pos = [];
+    info.slab.quads.forEach(function (q) {
+      pos.push(q[0][0], y, q[0][1], q[2][0], y, q[2][1], q[1][0], y, q[1][1],
+               q[0][0], y, q[0][1], q[3][0], y, q[3][1], q[2][0], y, q[2][1]);
+    });
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    C.add(new THREE.Mesh(g, acMat(mode, 'slab', plan)));
+  }
+  if (info.grid && mode === 'mark') {
+    var gm = acMat(mode, 'grid', plan);
+    info.grid.rects.forEach(function (r) {
+      var pg = new THREE.PlaneGeometry(r.w, r.d); pg.rotateX(Math.PI / 2);
+      var me = new THREE.Mesh(pg, gm); me.position.set(r.x, r.y - 0.01, r.z); C.add(me);
+    });
+  }
+  if (info.walls) {
+    var wm = acMat(mode, 'wall', false), em = new THREE.LineBasicMaterial({ color: mode === 'mark' ? '#9c1f5c' : '#8a8378' });
+    info.walls.panels.forEach(function (p) {
+      var b = boxMesh(p.len, p.h, 0.05, wm); b.rotation.y = p.rot * D2R; b.position.set(p.x, p.y0, p.z); W.add(b);
+      var e = new THREE.LineSegments(new THREE.EdgesGeometry(b.geometry), em); e.rotation.y = b.rotation.y; e.position.copy(b.position); W.add(e);
+    });
+  }
+  return { ceil: C, wall: W };
+}
+
 BUILD.fan = function (it, G) {
   var m = mat('#5a5752');
   G.add(at(cyl(0.012, 0.012, 0.45, m, 6), 0, 0.05, 0));
@@ -1036,8 +1150,9 @@ function exportGLB(root) {
 var App = (function () {
   var LS_CUR = 'hall3d.current', LS_LAYOUTS = 'hall3d.layouts', STATE_V = 8;
   var CUT_TYPES = { column: 1, door: 1, cabinet: 1, woodwall: 1 };
-  var A = { state: null, sel: null, view: 'orbit', tool: 'select', listen: null, lock: true, snap: true, showCeil: true };
+  var A = { state: null, sel: null, view: 'orbit', tool: 'select', listen: null, lock: true, snap: true, showCeil: true, acoustic: 'off', acScope: 'all' };
   var renderer, scene, persp, ortho, root, helpers, selBox, groups = {};
+  var acCeil = null, acWall = null, acInfo = null, AC_FRONT_Z = 4.0; // 吸音提案疊加層：不進存檔、不進 GLB
   var canvas, stageEl, tipEl, hudEl;
   var undoStack = [], redoStack = [];
   var orbit = { tx: 10, ty: 0, tz: 8, theta: 0.35, phi: 0.95, r: 28 };
@@ -1149,6 +1264,7 @@ var App = (function () {
         g.visible = !((it.z > P.W - m && cp.z > P.W) || (it.z < m && cp.z < 0) || (it.x > P.L - m && cp.x > P.L) || (it.x < m && cp.x < 0));
       } else g.visible = true;
     });
+    if (acCeil) acCeil.visible = A.view === 'plan' || (A.showCeil && (A.view === 'seat' || A.view === 'match' || c.position.y < acInfo.slab.y - 0.1));
     renderer.render(scene, c);
   }
 
@@ -1157,8 +1273,31 @@ var App = (function () {
     while (root.children.length) root.remove(root.children[0]);
     groups = {};
     A.state.items.forEach(function (it) { var g = buildItem(it); groups[it.id] = g; root.add(g); });
+    rebuildAcoustic();
     refreshSel(); hook('onItems');
   }
+  function rebuildAcoustic() {
+    if (acCeil) { scene.remove(acCeil); scene.remove(acWall); acCeil = acWall = null; }
+    if (A.acoustic === 'off') return;
+    acInfo = {
+      slab: acousticPanels(A.state.items, AC_FRONT_Z),
+      walls: A.acScope !== 'ceil' ? acousticWalls(A.state.items) : null,
+      grid: A.acScope === 'all' ? acousticGrid(A.state.items) : null
+    };
+    var g = buildAcoustic(acInfo, A.acoustic, A.view === 'plan');
+    acCeil = g.ceil; acWall = g.wall; scene.add(acCeil); scene.add(acWall);
+  }
+  A.setAcoustic = function (mode) { A.acoustic = mode; rebuildAcoustic(); hud(); };
+  A.setAcScope = function (s) { A.acScope = s; rebuildAcoustic(); hud(); };
+  // 吸音提案視角
+  // 後排：後排中央（z 11），面向舞台、抬頭約 29°，會眾平常看到處理區的角度
+  // 前排：前排中央（z 4.6），轉身朝南、抬頭約 26°，整片中後段天花、南側平頂與控台後牆都在畫面裡
+  A.acousticView = function (front) {
+    var s = A.stageItem();
+    seat.x = s ? s.x : 13.7; seat.z = front ? 4.6 : 11.0; seat.y = A.floorHeightAt(seat.x, seat.z) + 1.15; seat.set = true;
+    seat.yaw = front ? 0 : Math.PI; seat.pitch = front ? 0.45 : 0.5;
+    A.setView('seat');
+  };
   function rebuildOne(id) {
     var it = A.itemById(id), old = groups[id];
     if (old) root.remove(old);
@@ -1317,6 +1456,7 @@ var App = (function () {
     if (v === 'plan') fitPlan();
     if (v === 'match' && !MATCH_SHOTS.length) { A.view = 'orbit'; hook('onMode'); return; }
     if (v !== 'match') document.getElementById('matchImg').hidden = true;
+    rebuildAcoustic();
     resize();
     hud(); hook('onMode');
   };
@@ -1380,6 +1520,12 @@ var App = (function () {
     if (A.view === 'plan') t = '平面圖：北在上。拖曳平移，滾輪縮放。';
     if (A.tool === 'measure') t = measureText() || '量距離：點第一點，再點第二點。';
     if (A.tool === 'listen') t = A.listen ? '聆聽點已放置（耳高 115 cm），右側列出各喇叭距離與到達時間。點別處可移動。' : '聆聽點：點地板放置。';
+    if (A.acoustic !== 'off' && acInfo) {
+      var parts = ['樓板 ' + acInfo.slab.area.toFixed(1) + ' m²'];
+      if (acInfo.walls) parts.push('牆面 ' + acInfo.walls.area.toFixed(1) + ' m²');
+      if (acInfo.grid) parts.push('平頂換礦纖板 ' + acInfo.grid.area.toFixed(1) + ' m²' + (A.acoustic === 'real' ? '（外觀與現況相同，不另外畫）' : ''));
+      t += (t ? '　' : '') + '吸音提案：' + parts.join('、') + (A.acoustic === 'mark' ? '。標色：樓板青、牆面洋紅、平頂琥珀。' : '。') + '樓板依吊板間隙裁切，梁側面沒建模。';
+    }
     hudEl.textContent = t;
   }
 
@@ -1855,6 +2001,12 @@ var UI = (function () {
       };
     });
     $('#optCeil').onchange = function (e) { App.showCeil = e.target.checked; };
+    $('#optAcoustic').onchange = function (e) { App.setAcoustic(e.target.value); };
+    // 按視角鈕時提案若是關的，直接開成標色（實際樣貌刻意做得不顯眼，第一眼看範圍用標色）
+    function acOn() { var s = $('#optAcoustic'); if (s.value === 'off') { s.value = 'mark'; App.setAcoustic('mark'); } }
+    $('#btnAcView').onclick = function () { acOn(); App.acousticView(false); };
+    $('#btnAcFront').onclick = function () { acOn(); App.acousticView(true); };
+    $('#optAcScope').onchange = function (e) { App.setAcScope(e.target.value); };
     $('#optLock').onchange = function (e) { App.setLock(e.target.checked); };
     $('#optSnap').onchange = function (e) { App.snap = e.target.checked; };
     $('#optMap').onchange = function (e) { App.setMapRef(e.target.checked); };
